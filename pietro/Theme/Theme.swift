@@ -14,17 +14,53 @@ extension Color {
 }
 
 struct ColorTheme {
+    // MARK: - Base Colors
+
     let background = Color(hex: "0a0a0b")
     let foreground = Color(hex: "fafafa")
     let card = Color(hex: "161618")
     let cardElevated = Color(hex: "1c1c1f")
-    let primary = Color(hex: "38bdf8")
-    let secondary = Color(hex: "0ea5e9")
-    let muted = Color(hex: "71717a")
     let border = Color.white.opacity(0.06)
+
+    // MARK: - Semantic Colors
+
+    let primary = Color(hex: "7c3aed") // Purple accent
+    let primaryForeground = Color(hex: "fafafa")
+    let secondary = Color(hex: "27272a")
+    let secondaryForeground = Color(hex: "fafafa")
+    let accent = Color(hex: "3b82f6") // Blue system accent
+    let accentForeground = Color(hex: "fafafa")
+    let muted = Color(hex: "71717a")
+    let mutedForeground = Color(hex: "a1a1aa")
+
+    // MARK: - Status Colors
+
     let success = Color(hex: "22c55e")
-    let amber = Color(hex: "f59e0b")
-    let orange = Color(hex: "fb923c")
+    let successForeground = Color(hex: "052e16")
+    let warning = Color(hex: "f59e0b")
+    let warningForeground = Color(hex: "451a03")
+    let destructive = Color(hex: "ef4444")
+    let destructiveForeground = Color(hex: "fafafa")
+
+    // MARK: - Stat Colors (RPG-inspired)
+
+    let strength = Color(hex: "ef4444") // Red
+    let vitality = Color(hex: "22c55e") // Green
+    let agility = Color(hex: "3b82f6") // Blue
+    let recovery = Color(hex: "a855f7") // Purple
+
+    // MARK: - Rank Colors
+
+    func rankColor(_ rank: HunterRank) -> Color {
+        switch rank {
+        case .e: return Color(hex: "6b7280") // Gray
+        case .d: return Color(hex: "cd7f32") // Bronze
+        case .c: return Color(hex: "c0c0c0") // Silver
+        case .b: return Color(hex: "3b82f6") // Blue
+        case .a: return Color(hex: "8b5cf6") // Purple
+        case .s: return Color(hex: "fbbf24") // Gold
+        }
+    }
 }
 
 extension Color {
@@ -102,6 +138,44 @@ extension LinearGradient {
             )
         }
     }
+
+    // MARK: - Semantic Gradients
+
+    static let accentGradient = LinearGradient(
+        colors: [Color(hex: "1e3a5f"), Color(hex: "0f172a")],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+    static let accentBorderGradient = LinearGradient(
+        colors: [Color(hex: "3b82f6").opacity(0.5), Color(hex: "3b82f6").opacity(0.2)],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+    static let primaryGlowGradient = LinearGradient(
+        colors: [Color(hex: "5b21b6"), Color(hex: "7c3aed")],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+    static let destructiveGradient = LinearGradient(
+        colors: [Color(hex: "dc2626"), Color(hex: "ef4444")],
+        startPoint: .leading,
+        endPoint: .trailing
+    )
+
+    static let successGradient = LinearGradient(
+        colors: [Color(hex: "16a34a"), Color(hex: "22c55e")],
+        startPoint: .leading,
+        endPoint: .trailing
+    )
+
+    static let warningGradient = LinearGradient(
+        colors: [Color(hex: "d97706"), Color(hex: "fbbf24")],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
 }
 
 // MARK: - Category Colors
@@ -109,9 +183,9 @@ extension LinearGradient {
 extension WorkoutCategory {
     var categoryColor: Color {
         switch self {
-        case .push: return Color.theme.primary
+        case .push: return Color.theme.accent
         case .pull: return Color.theme.success
-        case .core: return Color.theme.amber
+        case .core: return Color.theme.warning
         }
     }
     

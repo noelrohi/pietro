@@ -113,21 +113,32 @@ final class CompletedWorkout {
     var workoutCategory: String
     var durationMinutes: Int
     var completedAt: Date
-    
+    var xpValue: Int
+
     init(workout: Workout) {
         self.id = UUID()
         self.workoutName = workout.name
         self.workoutCategory = workout.categoryRaw
         self.durationMinutes = workout.durationMinutes
         self.completedAt = Date()
+        self.xpValue = CompletedWorkout.calculateXP(durationMinutes: workout.durationMinutes)
     }
-    
-    init(workoutName: String, category: WorkoutCategory, durationMinutes: Int, completedAt: Date = Date()) {
+
+    init(workoutName: String, category: WorkoutCategory, durationMinutes: Int, completedAt: Date = Date(), xpValue: Int? = nil) {
         self.id = UUID()
         self.workoutName = workoutName
         self.workoutCategory = category.rawValue
         self.durationMinutes = durationMinutes
         self.completedAt = completedAt
+        self.xpValue = xpValue ?? CompletedWorkout.calculateXP(durationMinutes: durationMinutes)
+    }
+
+    /// Calculate XP for a workout based on duration
+    /// Base: 50 XP, plus 10 XP per 10 minutes (capped at 100 bonus)
+    static func calculateXP(durationMinutes: Int) -> Int {
+        let baseXP = 50
+        let durationBonus = min((durationMinutes / 10) * 10, 100)
+        return baseXP + durationBonus
     }
     
     var category: WorkoutCategory {

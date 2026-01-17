@@ -11,11 +11,30 @@ import SwiftData
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var workouts: [Workout]
+    @Query private var profiles: [PlayerProfile]
 
     @State private var selectedTab: Int = 0
     @State private var hasSeededData = false
+    @State private var showOnboarding = false
+
+    private var hasCompletedOnboarding: Bool {
+        profiles.first?.hasCompletedOnboarding ?? false
+    }
 
     var body: some View {
+        Group {
+            if hasCompletedOnboarding {
+                mainAppView
+            } else {
+                OnboardingContainerView {
+                    // Onboarding complete - view will refresh automatically
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private var mainAppView: some View {
         TabView(selection: $selectedTab) {
             Tab("Today", systemImage: "sun.max.fill", value: 0) {
                 TodayView()
@@ -25,7 +44,11 @@ struct ContentView: View {
                 LibraryView()
             }
 
-            Tab("Progress", systemImage: "chart.bar.fill", value: 2) {
+            Tab("Achievements", systemImage: "trophy.fill", value: 2) {
+                AchievementsView()
+            }
+
+            Tab("Progress", systemImage: "chart.bar.fill", value: 3) {
                 ProgressView()
             }
         }
@@ -33,7 +56,6 @@ struct ContentView: View {
             Color.theme.background
             GrainOverlay()
         }
-        .preferredColorScheme(.dark)
         .onAppear {
             seedDataIfNeeded()
         }
@@ -144,5 +166,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [Workout.self, Exercise.self, CompletedWorkout.self], inMemory: true)
+        .modelContainer(for: [Workout.self, Exercise.self, CompletedWorkout.self, PlayerProfile.self, XPEvent.self, Quest.self, Achievement.self], inMemory: true)
 }

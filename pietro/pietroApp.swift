@@ -15,6 +15,10 @@ struct pietroApp: App {
             Workout.self,
             Exercise.self,
             CompletedWorkout.self,
+            PlayerProfile.self,
+            XPEvent.self,
+            Quest.self,
+            Achievement.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

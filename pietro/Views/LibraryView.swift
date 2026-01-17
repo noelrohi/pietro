@@ -68,30 +68,39 @@ struct LibraryView: View {
 
     // MARK: - Category Filter
 
+    @ViewBuilder
     private var categoryFilter: some View {
-        GlassEffectContainer(spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    FilterPill(title: "All", isSelected: selectedCategory == nil) {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedCategory = nil
-                        }
-                    }
+        if #available(iOS 26, *) {
+            GlassEffectContainer(spacing: 8) {
+                categoryFilterContent
+            }
+        } else {
+            categoryFilterContent
+        }
+    }
 
-                    ForEach(WorkoutCategory.allCases, id: \.self) { category in
-                        FilterPill(
-                            title: category.rawValue,
-                            isSelected: selectedCategory == category,
-                            accentColor: category.categoryColor
-                        ) {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                selectedCategory = selectedCategory == category ? nil : category
-                            }
+    private var categoryFilterContent: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                LibraryCategoryPill(title: "All", isSelected: selectedCategory == nil) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedCategory = nil
+                    }
+                }
+
+                ForEach(WorkoutCategory.allCases, id: \.self) { category in
+                    LibraryCategoryPill(
+                        title: category.rawValue,
+                        isSelected: selectedCategory == category,
+                        accentColor: category.categoryColor
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedCategory = selectedCategory == category ? nil : category
                         }
                     }
                 }
-                .padding(.horizontal, 20)
             }
+            .padding(.horizontal, 20)
         }
     }
 
@@ -114,9 +123,9 @@ struct LibraryView: View {
     }
 }
 
-// MARK: - Filter Pill
+// MARK: - Category Pill
 
-private struct FilterPill: View {
+private struct LibraryCategoryPill: View {
     let title: String
     let isSelected: Bool
     var accentColor: Color = Color.theme.primary
@@ -147,7 +156,13 @@ private struct UnselectedGlassModifier: ViewModifier {
         if isSelected {
             content
         } else {
-            content.glassEffect(.regular.interactive(), in: .capsule)
+            if #available(iOS 26, *) {
+                content.glassEffect(.regular.interactive(), in: .capsule)
+            } else {
+                content
+                    .background(Color.theme.card)
+                    .clipShape(Capsule())
+            }
         }
     }
 }

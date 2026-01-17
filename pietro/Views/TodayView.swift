@@ -12,6 +12,31 @@ struct TodayView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Workout.createdAt) private var workouts: [Workout]
     @Query(sort: \CompletedWorkout.completedAt, order: .reverse) private var completedWorkouts: [CompletedWorkout]
+    @Query private var profiles: [PlayerProfile]
+    @Query(sort: \Quest.createdAt) private var quests: [Quest]
+    @Query(sort: \Achievement.key) private var achievements: [Achievement]
+
+    // XP System State
+    @State private var xpService: XPService?
+    @State private var showXPToast = false
+    @State private var pendingXPResult: XPAwardResult?
+    @State private var showLevelUp = false
+    @State private var levelUpLevel: Int?
+    @State private var showRankUp = false
+    @State private var rankUpRank: HunterRank?
+
+    // Quest & Achievement State
+    @State private var questService: QuestService?
+    @State private var achievementService: AchievementService?
+    @State private var showQuestToast = false
+    @State private var pendingQuestCompletions: [QuestCompletionResult] = []
+    @State private var showAchievementOverlay = false
+    @State private var pendingAchievementUnlocks: [AchievementUnlockResult] = []
+    @State private var currentAchievementUnlock: Achievement?
+
+    private var playerProfile: PlayerProfile? {
+        profiles.first
+    }
 
     private var todayWorkout: Workout? {
         workouts.first { $0.isFeatured }
@@ -33,23 +58,133 @@ struct TodayView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Hero Section
-                    heroSection
+            ZStack {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        // Player XP Header
+                        if let profile = playerProfile {
+                            PlayerHeaderCompact(profile: profile)
+                                .padding(.horizontal, 20)
+                                .padding(.top, 8)
+                        }
 
-                    // Bento Stats Grid
-                    bentoStatsGrid
-                        .padding(.horizontal, 20)
-                        .padding(.top, 24)
+                        // Hero Section
+                        heroSection
 
-                    // Exercises
-                    exercisesSection
-                        .padding(.top, 32)
+                        // Daily Quests
+                        QuestsSection(quests: quests)
+                            .padding(.top, 24)
+
+                        // Bento Stats Grid
+                        bentoStatsGrid
+                            .padding(.horizontal, 20)
+                            .padding(.top, 24)
+
+                        // Exercises
+                        exercisesSection
+                            .padding(.top, 32)
+                    }
+                    .padding(.bottom, 100)
                 }
-                .padding(.bottom, 100)
+                .background(Color.theme.background)
+
+                // XP Toast Overlay
+                if showXPToast, let result = pendingXPResult {
+                    XPGainToast(result: result) {
+                        showXPToast = false
+                        pendingXPResult = nil
+
+                        // Show level up after XP toast dismisses
+                        if levelUpLevel != nil {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                showLevelUp = true
+                            }
+                        } else if rankUpRank != nil {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                showRankUp = true
+                            }
+                        } else {
+                            // No level/rank up, go to quests
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                showNextQuestToast()
+                            }
+                        }
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(10)
+                }
+
+                // Level Up Overlay
+                if showLevelUp, let level = levelUpLevel {
+                    LevelUpOverlayView(newLevel: level) {
+                        showLevelUp = false
+                        levelUpLevel = nil
+
+                        // Show rank up after level up dismisses, or quests
+                        if rankUpRank != nil {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                showRankUp = true
+                            }
+                        } else {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                showNextQuestToast()
+                            }
+                        }
+                    }
+                    .transition(.opacity)
+                    .zIndex(20)
+                }
+
+                // Rank Up Overlay
+                if showRankUp, let rank = rankUpRank {
+                    RankUpOverlayView(newRank: rank) {
+                        showRankUp = false
+                        rankUpRank = nil
+
+                        // Show quest completions after rank up
+                        showNextQuestToast()
+                    }
+                    .transition(.opacity)
+                    .zIndex(30)
+                }
+
+                // Quest Complete Toast
+                if showQuestToast, let completion = pendingQuestCompletions.first {
+                    QuestCompleteToast(
+                        quest: completion.quest,
+                        xpAwarded: completion.xpAwarded
+                    ) {
+                        showQuestToast = false
+                        pendingQuestCompletions.removeFirst()
+
+                        // Show next quest or achievement
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            if !pendingQuestCompletions.isEmpty {
+                                showQuestToast = true
+                            } else {
+                                showNextAchievementUnlock()
+                            }
+                        }
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(40)
+                }
+
+                // Achievement Unlock Overlay
+                if showAchievementOverlay, let achievement = currentAchievementUnlock {
+                    AchievementUnlockOverlay(achievement: achievement) {
+                        showAchievementOverlay = false
+                        currentAchievementUnlock = nil
+
+                        // Show next achievement
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            showNextAchievementUnlock()
+                        }
+                    }
+                    .transition(.opacity)
+                    .zIndex(50)
+                }
             }
-            .background(Color.theme.background)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -67,6 +202,24 @@ struct TodayView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+            }
+            .onAppear {
+                if xpService == nil {
+                    xpService = XPService(modelContext: modelContext)
+                }
+                if questService == nil {
+                    questService = QuestService(modelContext: modelContext)
+                }
+                if achievementService == nil {
+                    achievementService = AchievementService(modelContext: modelContext)
+                }
+
+                // Generate quests if needed
+                questService?.generateDailyQuestsIfNeeded(existingQuests: quests)
+                questService?.generateWeeklyQuestsIfNeeded(existingQuests: quests)
+
+                // Seed achievements if needed
+                achievementService?.seedAchievementsIfNeeded(existingAchievements: achievements)
             }
         }
     }
@@ -377,6 +530,86 @@ struct TodayView: View {
     private func startWorkout(_ workout: Workout) {
         let completed = CompletedWorkout(workout: workout)
         modelContext.insert(completed)
+
+        // Award XP if we have a profile and XP service
+        guard let profile = playerProfile, let service = xpService else { return }
+
+        // Calculate bonuses
+        let isFirstOfDay = service.isFirstWorkoutOfDay(completedWorkouts: completedWorkouts)
+        let currentStreak = service.calculateCurrentStreak(completedWorkouts: completedWorkouts)
+        let didCompleteWeeklyGoal = service.didJustCompleteWeeklyGoal(
+            completedWorkouts: completedWorkouts + [completed],
+            weeklyGoal: profile.weeklyGoal
+        )
+
+        // Award XP
+        let result = service.awardXPForWorkout(
+            workout: completed,
+            profile: profile,
+            currentStreak: currentStreak,
+            isFirstWorkoutOfDay: isFirstOfDay,
+            didCompleteWeeklyGoal: didCompleteWeeklyGoal
+        )
+
+        // Store results for overlays
+        pendingXPResult = result
+
+        if result.leveledUp {
+            levelUpLevel = result.newLevel
+        }
+
+        if result.rankedUp {
+            rankUpRank = result.newRank
+        }
+
+        // Check quest progress
+        if let questSvc = questService {
+            let questCompletions = questSvc.checkQuestProgress(
+                workout: completed,
+                profile: profile,
+                quests: quests,
+                completedWorkouts: completedWorkouts + [completed]
+            )
+            pendingQuestCompletions = questCompletions
+        }
+
+        // Check achievements
+        if let achievementSvc = achievementService {
+            let achievementUnlocks = achievementSvc.checkAchievements(
+                profile: profile,
+                completedWorkouts: completedWorkouts + [completed],
+                achievements: achievements,
+                currentStreak: currentStreak
+            )
+            pendingAchievementUnlocks = achievementUnlocks
+        }
+
+        // Show XP toast
+        withAnimation {
+            showXPToast = true
+        }
+    }
+
+    // MARK: - Notification Helpers
+
+    private func showNextQuestToast() {
+        if !pendingQuestCompletions.isEmpty {
+            withAnimation {
+                showQuestToast = true
+            }
+        } else {
+            showNextAchievementUnlock()
+        }
+    }
+
+    private func showNextAchievementUnlock() {
+        if let next = pendingAchievementUnlocks.first {
+            pendingAchievementUnlocks.removeFirst()
+            currentAchievementUnlock = next.achievement
+            withAnimation {
+                showAchievementOverlay = true
+            }
+        }
     }
 }
 
@@ -420,9 +653,18 @@ struct ExerciseCard: View {
 // Preview helper
 @MainActor
 var previewContainer: ModelContainer = {
-    let schema = Schema([Workout.self, Exercise.self, CompletedWorkout.self])
+    let schema = Schema([Workout.self, Exercise.self, CompletedWorkout.self, PlayerProfile.self, XPEvent.self, Quest.self, Achievement.self])
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: schema, configurations: config)
+
+    // Create player profile
+    let profile = PlayerProfile(displayName: "Player")
+    profile.hasCompletedOnboarding = true
+    profile.currentLevel = 3
+    profile.totalXP = 450
+    profile.currentXP = 450
+    profile.rank = .e
+    container.mainContext.insert(profile)
 
     let pushWorkout = Workout(name: "Push Day", category: .push, durationMinutes: 12, isFeatured: true)
 
@@ -448,6 +690,36 @@ var previewContainer: ModelContainer = {
             let completed = CompletedWorkout(workoutName: "Push Day", category: .push, durationMinutes: 12, completedAt: date)
             container.mainContext.insert(completed)
         }
+    }
+
+    // Add sample quests
+    let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: today)!
+    let dailyQuest1 = Quest.completeWorkouts(count: 1, expiresAt: endOfDay)
+    let dailyQuest2 = Quest.categoryWorkout(.push, expiresAt: endOfDay)
+    dailyQuest2.currentProgress = 1
+    dailyQuest2.isCompleted = true
+    let dailyQuest3 = Quest.exerciseCollector(count: 5, expiresAt: endOfDay)
+    dailyQuest3.currentProgress = 2
+
+    container.mainContext.insert(dailyQuest1)
+    container.mainContext.insert(dailyQuest2)
+    container.mainContext.insert(dailyQuest3)
+
+    // Add sample weekly quest
+    let endOfWeek = calendar.date(byAdding: .day, value: 5, to: today)!
+    let weeklyQuest = Quest.weeklyWorkouts(count: 5, expiresAt: endOfWeek)
+    weeklyQuest.currentProgress = 3
+    container.mainContext.insert(weeklyQuest)
+
+    // Add sample achievements
+    for definition in AchievementDefinition.all {
+        let achievement = definition.createAchievement()
+        if definition.key == "first_workout" {
+            achievement.unlock()
+        } else if definition.key == "workouts_10" {
+            achievement.progress = 3
+        }
+        container.mainContext.insert(achievement)
     }
 
     return container
